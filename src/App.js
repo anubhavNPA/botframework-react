@@ -1,31 +1,13 @@
 import React, { Component } from 'react';
-//import logo from './logo.svg';
 import './App.css';
 import 'whatwg-fetch';
-
-/** 
-class App extends Component {
-  render() {
-    return (
-      <div className="App">
-        <div className="App-header">
-          <img src={logo} className="App-logo" alt="logo" />
-          <h2>hdsdellodsdsWelcome to React</h2>
-        </div>
-        <p className="App-intro">
-          To get started, edit <code>src/App.js</code> and save to reload.
-        </p>
-      </div>
-    );
-  }
-}*/
-
 
 class DirectLineClient {
   constructor(secret) {
     this.secret = secret;
     this.token = '';
     this.conversationId = '';
+    this.streamUrl = '';
   }
 
   startConversation() {
@@ -34,12 +16,18 @@ class DirectLineClient {
     headers.append('Authorization', 'Bearer ' + self.token);
 
     return new Promise(function (resolve, reject) {
+      if (self.conversationId !== '') {
+        resolve({});
+        return;
+      }
+
       fetch('https://directline.botframework.com/v3/directline/conversations', { method: 'POST', headers: headers }).then(function (response) {
         if (!response.ok) {
           reject(response.statusText);
         }
         else {
           response.json().then(function (data) {
+            self.streamUrl = data.streamUrl;
             self.conversationId = data.conversationId;
             resolve(data);
           });
@@ -69,6 +57,29 @@ class DirectLineClient {
     });
   }
 
+
+  getMessages(streamEvent) {
+    var self = this;
+
+    return new Promise(function (resolve, reject) {
+
+      self.secretToToken().then(function () {
+        self.startConversation().then(function () {
+          // stream url
+          var exampleSocket = new WebSocket(self.streamUrl);
+          exampleSocket.onmessage = function (event) {
+            streamEvent(JSON.parse(event.data));
+          }
+        }).catch(function (startConversationExeption) {
+          console.log('startConversationExeption:' + JSON.stringify(startConversationExeption));
+        });
+      }).catch(function (secretToTokenException) {
+        console.log('secretToTokenException:' + JSON.stringify(secretToTokenException));
+      });
+    });
+  }
+
+
   secretToToken() {
     var self = this;
 
@@ -92,72 +103,77 @@ class DirectLineClient {
 
   postMessage(text, from) {
     var self = this;
-    var activity = { type: 'message', text: text, from: {id: from}};
 
-    var headers = new Headers();
-    headers.append('Authorization', 'Bearer ' + self.token);
-    headers.append('Content-Type', 'application/json');
+    self.secretToToken().then(function () {
+      self.startConversation().then(function () {
+        var activity = { type: 'message', text: text, from: { id: from } };
 
-    return new Promise(function (resolve, reject) {
-      fetch('https://directline.botframework.com/v3/directline/conversations/' + self.conversationId +'/activities', { method: 'POST', headers: headers, body: JSON.stringify(activity), mode: 'cors' }).then(function (response) {
-        if (!response.ok) {
-          reject(response.statusText);
-        }
-        else {
-          response.json().then(function (data) {
-            resolve(data);
+        var headers = new Headers();
+        headers.append('Authorization', 'Bearer ' + self.token);
+        headers.append('Content-Type', 'application/json');
+
+        return new Promise(function (resolve, reject) {
+          fetch('https://directline.botframework.com/v3/directline/conversations/' + self.conversationId + '/activities', { method: 'POST', headers: headers, body: JSON.stringify(activity), mode: 'cors' }).then(function (response) {
+            if (!response.ok) {
+              reject(response.statusText);
+            }
+            else {
+              response.json().then(function (data) {
+                resolve(data);
+              });
+            }
           });
-        }
+        });
+      }).catch(function (startConversationExeption) {
+        console.log('startConversationExeption:' + JSON.stringify(startConversationExeption));
       });
+    }).catch(function (secretToTokenException) {
+      console.log('secretToTokenException:' + JSON.stringify(secretToTokenException));
     });
   }
 }
 
-class Bob extends Component {
+
+function NumberList(props) {
+  const numbers = props.numbers;
+  const listItems = numbers.map((number) =>
+    <li key={number.id}>{number.text}</li>
+  );
+  return (
+    <ul>{listItems}</ul>
+  );
+}
+
+class BotClientComponent extends Component {
   constructor() {
     super();
+    var self = this;
+    this.state = {
+      messages: []
+    };
+
     this.directLineClient = new DirectLineClient('80fC1ZWjgYg.cwA._aw.N4uV2Xza27jcWN_NpPNLn44b7bj9DxfQK4tm0vMgeYM');
+    this.directLineClient.getMessages(function (streamData) {
+      var arrayvar = self.state.messages.slice()
+      arrayvar.push(...streamData.activities)
+      self.setState({ messages: arrayvar })
+      console.log(self.state.messages);
+    }); // start streaming
   }
 
   handleClick() {
     var self = this;
-    var conversationId = '';
-    var token = '';
-
-    self.directLineClient.secretToToken().then(function (secretToTokenData) {
-      console.log('secretToTokenData=' + JSON.stringify(secretToTokenData));
-      var token = secretToTokenData.token;
-      self.directLineClient.startConversation().then(function(startConversationData) {
-          console.log("startConversationData=" + JSON.stringify(startConversationData));
-          self.directLineClient.refreshToken().then(function(refreshTokenData) {
-            console.log("refreshTokenData=" + JSON.stringify(refreshTokenData));
-            token = refreshTokenData.token;
-            conversationId = refreshTokenData.conversationId;
-            
-            self.directLineClient.postMessage('Leeds, UK', 'test').then(function(postMessageData) {
-              console.log('postMessageData=' + JSON.stringify(postMessageData));
-            }).catch(function(error) {
-              console.log('Error: ' + error);
-            });
-
-          }).catch(function(error) {
-              console.log('Error: ' + error);
-          });
-      }).catch(function(error) {
-          console.log('Error: ' + error);
-      });
-    }).catch(function (error) {
-      console.log('Error: ' + error);
-    });
+    self.directLineClient.postMessage('Leeds, UK', 'james');
   }
 
   render() {
     return (
-      <div className="Bob">
-        <button className="square" onClick={this.handleClick.bind(this)}>Click me</button>
+      <div>
+        <NumberList numbers={this.state.messages} />,
+        <button onClick={this.handleClick.bind(this)}>Send message</button>
       </div>
     );
   }
 }
 
-export default Bob;
+export default BotClientComponent;
