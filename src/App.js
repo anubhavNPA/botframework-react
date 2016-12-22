@@ -22,10 +22,16 @@ class App extends Component {
 
 
 class DirectLineClient {
+  constructor(secret) {
+    this.secret = secret;
+    this.token = '';
+    this.conversationId = '';
+  }
 
-  startConversation(secretOrToken) {
+  startConversation() {
+    var self = this;
     var headers = new Headers();
-    headers.append('Authorization', 'Bearer ' + secretOrToken);
+    headers.append('Authorization', 'Bearer ' + self.token);
 
     return new Promise(function (resolve, reject) {
       fetch('https://directline.botframework.com/v3/directline/conversations', { method: 'POST', headers: headers }).then(function (response) {
@@ -34,6 +40,7 @@ class DirectLineClient {
         }
         else {
           response.json().then(function (data) {
+            self.conversationId = data.conversationId;
             resolve(data);
           });
         }
@@ -41,9 +48,11 @@ class DirectLineClient {
     });
   }
 
-  refreshToken(token) {
+  refreshToken() {
+    var self = this;
+
     var headers = new Headers();
-    headers.append('Authorization', 'Bearer ' + token);
+    headers.append('Authorization', 'Bearer ' + self.token);
 
     return new Promise(function (resolve, reject) {
       fetch('https://directline.botframework.com/v3/directline/tokens/refresh', { method: 'POST', headers: headers }).then(function (response) {
@@ -52,6 +61,7 @@ class DirectLineClient {
         }
         else {
           response.json().then(function (data) {
+            self.token = data.token;
             resolve(data);
           });
         }
@@ -59,9 +69,11 @@ class DirectLineClient {
     });
   }
 
-  secretToToken(secret) {
+  secretToToken() {
+    var self = this;
+
     var headers = new Headers();
-    headers.append('Authorization', 'Bearer ' + secret);
+    headers.append('Authorization', 'Bearer ' + self.secret);
 
     return new Promise(function (resolve, reject) {
       fetch('https://directline.botframework.com/v3/directline/tokens/generate', { method: 'POST', headers: headers }).then(function (response) {
@@ -70,6 +82,7 @@ class DirectLineClient {
         }
         else {
           response.json().then(function (data) {
+            self.token = data.token;
             resolve(data);
           });
         }
@@ -77,15 +90,16 @@ class DirectLineClient {
     });
   }
 
-  postMessage(secretOrToken, conversationId, text, from) {
+  postMessage(text, from) {
+    var self = this;
     var activity = { type: 'message', text: text, from: {id: from}};
 
     var headers = new Headers();
-    headers.append('Authorization', 'Bearer ' + secretOrToken);
+    headers.append('Authorization', 'Bearer ' + self.token);
     headers.append('Content-Type', 'application/json');
 
     return new Promise(function (resolve, reject) {
-      fetch('https://directline.botframework.com/v3/directline/conversations/' + conversationId +'/activities', { method: 'POST', headers: headers, body: JSON.stringify(activity), mode: 'cors' }).then(function (response) {
+      fetch('https://directline.botframework.com/v3/directline/conversations/' + self.conversationId +'/activities', { method: 'POST', headers: headers, body: JSON.stringify(activity), mode: 'cors' }).then(function (response) {
         if (!response.ok) {
           reject(response.statusText);
         }
@@ -102,7 +116,7 @@ class DirectLineClient {
 class Bob extends Component {
   constructor() {
     super();
-    this.directLineClient = new DirectLineClient();
+    this.directLineClient = new DirectLineClient('80fC1ZWjgYg.cwA._aw.N4uV2Xza27jcWN_NpPNLn44b7bj9DxfQK4tm0vMgeYM');
   }
 
   handleClick() {
@@ -110,17 +124,17 @@ class Bob extends Component {
     var conversationId = '';
     var token = '';
 
-    self.directLineClient.secretToToken('80fC1ZWjgYg.cwA._aw.N4uV2Xza27jcWN_NpPNLn44b7bj9DxfQK4tm0vMgeYM').then(function (secretToTokenData) {
+    self.directLineClient.secretToToken().then(function (secretToTokenData) {
       console.log('secretToTokenData=' + JSON.stringify(secretToTokenData));
       var token = secretToTokenData.token;
-      self.directLineClient.startConversation(token).then(function(startConversationData) {
+      self.directLineClient.startConversation().then(function(startConversationData) {
           console.log("startConversationData=" + JSON.stringify(startConversationData));
-          self.directLineClient.refreshToken(token).then(function(refreshTokenData) {
+          self.directLineClient.refreshToken().then(function(refreshTokenData) {
             console.log("refreshTokenData=" + JSON.stringify(refreshTokenData));
             token = refreshTokenData.token;
             conversationId = refreshTokenData.conversationId;
             
-            self.directLineClient.postMessage(token, conversationId, 'Leeds, UK', 'test').then(function(postMessageData) {
+            self.directLineClient.postMessage('Leeds, UK', 'test').then(function(postMessageData) {
               console.log('postMessageData=' + JSON.stringify(postMessageData));
             }).catch(function(error) {
               console.log('Error: ' + error);
