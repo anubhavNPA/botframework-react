@@ -63,9 +63,25 @@ class DirectLineClient {
                 self.startConversation().then(function () {
                     // stream url
                     var exampleSocket = new WebSocket(self.streamUrl);
+                    exampleSocket.onerror = function (event) {
+                        console.log('onerror');
+                            console.log(event);
+                    };
+                    exampleSocket.onclose = function (event) {
+                        console.log('onclose');
+                            console.log(event);
+                    };
+                    exampleSocket.onopen = function (event) {
+                        console.log('onopen');
+                            console.log(event);
+                    };
                     exampleSocket.onmessage = function (event) {
-                        streamEvent(JSON.parse(event.data));
-                    }
+                        console.log('stream event');
+                        console.log(event);
+                        if (event.data) {
+                            streamEvent(JSON.parse(event.data));
+                        }
+                    };
                 }).catch(function (startConversationExeption) {
                     console.log('startConversationExeption:' + JSON.stringify(startConversationExeption));
                 });
@@ -97,19 +113,21 @@ class DirectLineClient {
         });
     }
 
-    postMessage(text, from) {
+    postMessage(activity) {
+
         var self = this;
+        return new Promise(function (resolve, reject) {
 
-        // self.secretToToken().then(function () {
-        //   self.startConversation().then(function () {
-        self.refreshToken().then(function () {
-            var activity = { type: 'message', text: text, from: { id: from } };
 
-            var headers = new Headers();
-            headers.append('Authorization', 'Bearer ' + self.token);
-            headers.append('Content-Type', 'application/json');
+            // self.secretToToken().then(function () {
+            //   self.startConversation().then(function () {
+            self.refreshToken().then(function () {
+                //var activity = { type: 'message', text: text, from: { id: from }, channelData: { localId: localId } };
 
-            return new Promise(function (resolve, reject) {
+                var headers = new Headers();
+                headers.append('Authorization', 'Bearer ' + self.token);
+                headers.append('Content-Type', 'application/json');
+
                 fetch('https://directline.botframework.com/v3/directline/conversations/' + self.conversationId + '/activities', { method: 'POST', headers: headers, body: JSON.stringify(activity), mode: 'cors' }).then(function (response) {
                     if (!response.ok) {
                         reject(response.statusText);
@@ -120,6 +138,7 @@ class DirectLineClient {
                         });
                     }
                 });
+
             });
         });
     }
